@@ -1,0 +1,28 @@
+########### NEW TEST CASE SET ###########
+########### INPUT ###########
+read int as N
+########### OUTPUT ###########
+int N = Convert.ToInt32(Console.ReadLine());
+
+########### NEW TEST CASE SET ###########
+########### INPUT ###########
+multiply A and B as int N
+########### OUTPUT ###########
+int N = A * B;
+
+########### NEW TEST CASE SET ###########
+########### INPUT ###########
+write int N
+########### OUTPUT ###########
+Console.Writeline(N);
+
+########### NEW TEST CASE SET ###########
+########### INPUT ###########
+max int array A as M
+########### OUTPUT ###########
+int M = int.MinValue;
+for (int i = 0; i < A.Length; i++) {
+    if (A[i] > M) {
+        M = A[i];
+    }
+}

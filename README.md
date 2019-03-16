@@ -28,14 +28,20 @@ An algorithm which can help with translating pseudocode to code
   - the output does not contain substrings matching the input variables which do not correspond to the input variables
 - other complicated logic
 
+# Test Case File Format
+
+- tuples of input output
+- each input-output pair corresponds to a test case set that the compiler must handle 
+
 # To Do
 
 - [x] README
 - [x] basic code
-- [ ] test.py
+- [x] main.py
   - list of test cases, gen compiler and check that the input is mapped correctly to the output
-- [ ] try running and debug
-- [ ] .transform method
+- [x] try running and debug
+- [x] .transform method
+- [x] Simple C# Example
 
 # Future Features
 

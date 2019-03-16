@@ -41,6 +41,14 @@ VAR_TOKEN_TYPES = ['int', 'float', 'string', 'variable']
 PATH = os.path.dirname(os.path.abspath(__file__))
 CORE_COMPILER_PATH = os.path.join(PATH, "templates/compiler_core.py")
 
+# test file tags
+NEW_TAG = '########### NEW TEST CASE SET ###########'
+INPUT_TAG =  '########### INPUT ###########'
+OUTPUT_TAG =  '########### OUTPUT ###########'
+TAGS = [NEW_TAG, INPUT_TAG, OUTPUT_TAG]
+BLOCK = '\n'.join([NEW_TAG, INPUT_TAG, '', OUTPUT_TAG, '', ''])
+
+
 def file_to_string(filename):
     with open(filename) as f:
         return str(f.read())
@@ -54,8 +62,8 @@ def get_command_output(cmd):
     try:
         import subprocess
         # Can't handle piped commands
-        result = subprocess.call(cmd.split(), stderr=sys.stderr)
-        return str(result)
+        output = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE).communicate()[0]
+        return output.decode("utf-8")
     except Exception as ex:
         print('Error', ex)
 
@@ -73,16 +81,27 @@ def load_test_file(file_path):
     with open(file_path) as f:
         text = str(f.read())
     test_case_sets = text.split(NEW_TAG + '\n')
-    result = []
+
+    # ignore blanks
+    test_case_sets = [a for a in test_case_sets if a]
+
+    x = []
+    y = []
     for test_case_set in test_case_sets:
         test_cases_texts = test_case_set.split(INPUT_TAG + '\n')
-        test_cases = []
+        test_cases_texts = [a for a in test_cases_texts if a]
+        test_cases_x = []
+        test_cases_y = []
         for test_case_text in test_cases_texts:
             input, output = test_case_text.split(OUTPUT_TAG + '\n')
-            test_cases.append((input, output))
-        result.append((input, output))
+            input = input[:-1]
+            output = output[:-2]
+            test_cases_x.append(input)
+            test_cases_y.append(output)
+        x.append('\n'.join(test_cases_x))
+        y.append('\n'.join(test_cases_y))
         
-    return result
+    return x, y
 
 def gen_blocked_code(prefix, condition, code_block):
     header_line = '{}{}:'.format(prefix, condition)
@@ -283,7 +302,7 @@ class CompilerCodeGenerator:
                 output_split_by_var = [a for i, a in enumerate(output_split_by_var) if i % 2 == 0]
 
                 for i, output_chunk in enumerate(output_split_by_var):
-                    output_code.append('"{}"'.format(output_chunk))
+                    output_code.append('"{}"'.format(output_chunk.replace('\n', '\\n')))
                     if i < len(output_split_by_var) - 1:  # add variable use
                         output_code.append(' + var{} +\n'.format(var_ordered_wrt_output[i]) + ' ' * 10)
                 output_code.append(')')
@@ -325,20 +344,30 @@ class CompilerCodeGenerator:
 
 
 def main():
-    gen = CompilerCodeGenerator()
+    #test_folder_path = sys.argv[1]
+    #test_file_paths = get_file_paths_recursively(test_folder_path)
+    test_file_path = sys.argv[1]
+    compiler_path = sys.argv[2]
+
+    gen = CompilerCodeGenerator(compiler_path)
+
+    #for test_file_path in test_file_paths:
+    x, y = load_test_file(test_file_path)
+    gen.fit(x, y)
+
+    print('done creating the compiler')
+    print('now testing inputs with expected outputs')
+
+    n_success = 0
+    for test_x, test_y in zip(x, y):
+        output = gen.transform(test_x)
+        if test_y.strip() == output.strip():
+            n_success += 1
+        else:
+            print('Failed Equality Between Prediction\n{}\nAND Expected Ouput\n{}'.format(output, test_y))
+    print(n_success, 'of', len(x), 'were successful')
     
-    test_folder_path = sys.argv[1]
-    test_file_paths = get_file_paths_recursively(test_folder_path)
-    
-    for test_file_path in test_file_paths:
-        test_case_sets = load_test_file(test_file_path)
-        for test_case_set in test_case_sets:
-            pass
-        
-       
-    
-    
-    print(gen_code.split('\n'))
+    #print(gen_code.split('\n'))
     
     
 if __name__ == "__main__":
