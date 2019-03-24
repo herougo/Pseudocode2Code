@@ -50,3 +50,5 @@ An algorithm which can help with translating pseudocode to code
 - features based on properties of the token (ie is_pdf_path)
 - do not split by spaces within a string
 - test cases from the sheet of paper
+- cleaning up code
+  - make feature a class and have case_recog_gen_fn return a class instance?

@@ -17,7 +17,9 @@ import subprocess
 9 - 30 min
 """
 
-def check(condition):
+def check(condition, msg=''):
+    if not condition:
+        print('Error:', msg)
     assert condition
 
 def list_find(l, element):
@@ -171,7 +173,7 @@ def re_findall(pattern, text):
     
 
 
-def gen_features(x_set_tokens, x_set_types):
+def gen_features(x_set_tokens, x_set_types, start_ix=0):
     # iterator which yields features that can be used by the x_set
     
     def length_feature_generator(token_len):
@@ -182,16 +184,18 @@ def gen_features(x_set_tokens, x_set_types):
         
     def constant_match_feature_generator(ix, constant):
         def constant_match_feature(tokens, types):
-            return types[ix] == 'constant' and tokens[ix] == constant
-        as_text = 'lambda tokens, types: types[{}] == "constant" and tokens[{}] == {}'.format(ix, ix, constant)
+            return ix < len(tokens) and types[ix] == 'constant' and tokens[ix] == constant
+        # Note: and types[{}] == "constant" was removed as types is not used
+        as_text = 'lambda tokens, types: {} < len(tokens) and tokens[{}] == "{}"'.format(ix, ix, constant)
         return constant_match_feature, as_text
-    
-    for x_example_tokens in x_set_tokens:
+
+    for j in [start_ix]:
+        x_example_tokens = x_set_tokens[j]
         # length
         yield length_feature_generator(len(x_example_tokens))
         # match a constant
         for i in range(1, len(x_example_tokens)):
-            yield constant_match_feature_generator(i, constant)
+            yield constant_match_feature_generator(i, x_example_tokens[i])
     
 
 def case_recog_gen_fn(x_set_tokens, x_set_types): 
@@ -205,30 +209,30 @@ def case_recog_gen_fn(x_set_tokens, x_set_types):
 
     for i in range(len(x_set_tokens)):
         ix_to_pop = -1
-        for feature_fn, feature_fn_text in gen_features(x_set_tokens, x_set_types):
+        for feature_fn, feature_fn_text in gen_features(x_set_tokens, x_set_types, i):
             feature_values = []
-            for x_example_tokens, x_example_types in zip(x_set_tokens, x_set_types):
+            for j in range(i, len(x_set_tokens)):
+                x_example_tokens = x_set_tokens[j]
+                x_example_types = x_set_types[j]
                 feature_values.append(feature_fn(x_example_tokens, x_example_types))
             n_true = feature_values.count(True)
-            check(n_true > 0)
-            if n_true == 1: # choose this feature_fn as it uniquely distinguishes a remaining case
+            #check(n_true > 0)
+            if feature_values[0] and n_true == 1: # choose this feature_fn as it uniquely distinguishes a remaining case
                 ix_to_pop = list_find(feature_values, True)
-                
-                # ** MORE?
+                feature_ix = i
 
-                
-                feature_text = 'feature{} = {}'.format(ix_to_pop, feature_fn_text)
+                feature_text = 'feature{} = {}'.format(feature_ix, feature_fn_text)
                 feature_code.append(feature_text)
-                conditions.append('feature{}(tokens, types)'.format(ix_to_pop))
+                conditions.append('feature{}(tokens, types)'.format(feature_ix))
                 break
         
-        check(ix_to_pop >= 0)
-        
-        def result_fn(code_blocks):
-            other_code = gen_if_elif_block_code(conditions, code_blocks)
-            return '\n'.join(feature_code) + '\n' + other_code
-        
-        return result_fn
+        check(ix_to_pop >= 0, 'no feature found')
+
+    def result_fn(code_blocks):
+        other_code = gen_if_elif_block_code(conditions, code_blocks)
+        return '\n'.join(feature_code) + '\n' + other_code
+
+    return result_fn
 
 class CompilerCodeGenerator:
     def __init__(self, path='compilers/default_compiler_path.py'):
@@ -265,17 +269,15 @@ class CompilerCodeGenerator:
                 y_set = y_set.split('\n')
 
             case_blocks = []
-            for x_example_tokens, y_example in zip(x_set_tokens, y_set):
+            for x_example_tokens, x_example_types, y_example in zip(x_set_tokens, x_set_types, y_set):
                 # get list of variables
                 var_names = []
                 var_indices = []
-                for test_case, test_case_types in zip(x_set_tokens, x_set_types):
-                    for i, (token, type) in enumerate(zip(test_case, test_case_types)):
-                        if type == "variable":
-                            var_names.append(token)
-                            var_indices.append(i)
-                var_indices_dict = dict([(var_name, var_index) for var_name, var_index in zip(var_names, var_indices)])
-                
+                for i, (token, type) in enumerate(zip(x_example_tokens, x_example_types)):
+                    if type == "variable":
+                        var_names.append(token)
+                        var_indices.append(i)
+
                 # solving the input-output mapping problem
                 # find variables in output
                 var_output_matches = []
@@ -325,6 +327,10 @@ class CompilerCodeGenerator:
 
         self.save()
 
+        print('done creating the compiler')
+        print('now testing inputs with expected outputs')
+        self._check_code(x, y)
+
     def save(self):
         string_to_file(self.code, self.path)
     
@@ -342,6 +348,16 @@ class CompilerCodeGenerator:
 
         return result
 
+    def _check_code(self, x, y):
+        n_success = 0
+        for test_x, test_y in zip(x, y):
+            output = self.transform(test_x)
+            if test_y.strip() == output.strip():
+                n_success += 1
+            else:
+                print('Failed Equality Between Prediction\n{}\nAND Expected Ouput\n{}'.format(output, test_y))
+        print(n_success, 'of', len(x), 'were successfully captured by the generated compiler')
+
 
 def main():
     #test_folder_path = sys.argv[1]
@@ -354,18 +370,6 @@ def main():
     #for test_file_path in test_file_paths:
     x, y = load_test_file(test_file_path)
     gen.fit(x, y)
-
-    print('done creating the compiler')
-    print('now testing inputs with expected outputs')
-
-    n_success = 0
-    for test_x, test_y in zip(x, y):
-        output = gen.transform(test_x)
-        if test_y.strip() == output.strip():
-            n_success += 1
-        else:
-            print('Failed Equality Between Prediction\n{}\nAND Expected Ouput\n{}'.format(output, test_y))
-    print(n_success, 'of', len(x), 'were successful')
     
     #print(gen_code.split('\n'))
     

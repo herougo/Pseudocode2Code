@@ -1,7 +1,13 @@
 ########### NEW TEST CASE SET ###########
 ########### INPUT ###########
 read int as N
+read int and n
+read int
+read N asan int
 ########### OUTPUT ###########
+int N = Convert.ToInt32(Console.ReadLine());
+int N = Convert.ToInt32(Console.ReadLine());
+int N = Convert.ToInt32(Console.ReadLine());
 int N = Convert.ToInt32(Console.ReadLine());
 
 ########### NEW TEST CASE SET ###########
